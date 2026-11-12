@@ -22,7 +22,7 @@ os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 downloads_status = {}
 ffmpeg_path = shutil.which("ffmpeg")
 
-# كود الواجهة الأمامية مدمج بالكامل هنا لكي لا تحتاج لملفات إضافية معقدة
+# كود الواجهة الأمامية مدمج بالكامل هنا
 HTML_CONTENT = """<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -37,7 +37,7 @@ HTML_CONTENT = """<!DOCTYPE html>
     <div class="max-w-xl w-full bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-2xl">
         <h1 class="text-2xl font-bold text-center mb-6 text-purple-400">محمل الفيديوهات السريع</h1>
         <div class="flex gap-2 mb-4">
-            <input type="url" id="videoUrl" placeholder="الصق رابط الفيديو هنا..." class="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-purple-500" dir="ltr">
+            <input type="url" id="videoUrl" placeholder="الصق رابط الفيديو هنا (يوتيوب، تيك توك...)" class="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-purple-500" dir="ltr">
             <button id="fetchBtn" class="bg-purple-600 hover:bg-purple-500 px-6 py-3 rounded-xl font-bold text-white transition">جلب</button>
         </div>
         <div id="result" class="text-center text-sm text-slate-400"></div>
@@ -57,7 +57,7 @@ HTML_CONTENT = """<!DOCTYPE html>
                 });
                 const data = await response.json();
                 if(response.ok) {
-                    resDiv.innerHTML = `<span class="text-green-400 font-bold">تم التحميل بنجاح! الملف جاهز في السيرفر.</span>`;
+                    resDiv.innerHTML = `<span class="text-green-400 font-bold">تم التحميل بنجاح! اسم الملف: ${data.filename}</span>`;
                 } else {
                     resDiv.innerHTML = `<span class="text-red-400">${data.detail}</span>`;
                 }
@@ -79,10 +79,19 @@ async def download_simple(data: dict):
     if not url:
         raise HTTPException(status_code=400, detail="الرابط مطلوب")
     
+    # إعدادات متقدمة لتجاوز حماية يوتيوب وتجنب خطأ الـ Bot
     ydl_opts = {
         'outtmpl': os.path.join(DOWNLOAD_DIR, '%(title)s.%(ext)s'),
         'format': 'best',
-        'quiet': True
+        'quiet': True,
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['android', 'web']
+            }
+        },
+        'http_headers': {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+        }
     }
     if ffmpeg_path:
         ydl_opts['ffmpeg_location'] = os.path.dirname(ffmpeg_path)
