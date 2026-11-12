@@ -1,9 +1,8 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 import yt_dlp
 import os
-import uuid
 import shutil
 
 app = FastAPI(title="Video Downloader API")
@@ -19,10 +18,9 @@ app.add_middleware(
 DOWNLOAD_DIR = "downloads"
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
-downloads_status = {}
 ffmpeg_path = shutil.which("ffmpeg")
 
-# كود الواجهة الأمامية مدمج بالكامل هنا
+# كود الواجهة الأمامية مع ميزة التنزيل المباشر للهاتف
 HTML_CONTENT = """<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -37,7 +35,7 @@ HTML_CONTENT = """<!DOCTYPE html>
     <div class="max-w-xl w-full bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-2xl">
         <h1 class="text-2xl font-bold text-center mb-6 text-purple-400">محمل الفيديوهات السريع</h1>
         <div class="flex gap-2 mb-4">
-            <input type="url" id="videoUrl" placeholder="الصق رابط الفيديو هنا (يوتيوب، تيك توك...)" class="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-purple-500" dir="ltr">
+            <input type="url" id="videoUrl" placeholder="الصق رابط الفيديو هنا (تيك توك، انستغرام...)" class="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-purple-500" dir="ltr">
             <button id="fetchBtn" class="bg-purple-600 hover:bg-purple-500 px-6 py-3 rounded-xl font-bold text-white transition">جلب</button>
         </div>
         <div id="result" class="text-center text-sm text-slate-400"></div>
@@ -48,17 +46,26 @@ HTML_CONTENT = """<!DOCTYPE html>
             const url = document.getElementById('videoUrl').value.trim();
             const resDiv = document.getElementById('result');
             if(!url) { alert('الرجاء إدخال الرابط'); return; }
-            resDiv.textContent = 'جاري التحميل والمعالجة...';
+            resDiv.textContent = 'جاري التحميل ومعالجة الفيديو...';
             try {
                 const response = await fetch(`${API_BASE}/api/download-simple`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ url })
                 });
-                const data = await response.json();
+                
                 if(response.ok) {
-                    resDiv.innerHTML = `<span class="text-green-400 font-bold">تم التحميل بنجاح! اسم الملف: ${data.filename}</span>`;
+                    const blob = await response.blob();
+                    const downloadUrl = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = downloadUrl;
+                    a.download = "video.mp4";
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    resDiv.innerHTML = `<span class="text-green-400 font-bold">تم التحميل بنجاح! وبدأ تنزيل الفيديو على هاتفك.</span>`;
                 } else {
+                    const data = await response.json();
                     resDiv.innerHTML = `<span class="text-red-400">${data.detail}</span>`;
                 }
             } catch(e) {
@@ -79,9 +86,8 @@ async def download_simple(data: dict):
     if not url:
         raise HTTPException(status_code=400, detail="الرابط مطلوب")
     
-    # إعدادات متقدمة لتجاوز حماية يوتيوب وتجنب خطأ الـ Bot
     ydl_opts = {
-        'outtmpl': os.path.join(DOWNLOAD_DIR, '%(title)s.%(ext)s'),
+        'outtmpl': os.path.join(DOWNLOAD_DIR, '%(id)s.%(ext)s'),
         'format': 'best',
         'quiet': True,
         'extractor_args': {
@@ -100,7 +106,7 @@ async def download_simple(data: dict):
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             filename = ydl.prepare_filename(info)
-            return {"status": "success", "filename": os.path.basename(filename)}
+            return FileResponse(filename, media_type="video/mp4", filename=os.path.basename(filename))
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
